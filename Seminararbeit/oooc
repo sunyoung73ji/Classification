@@ -1,0 +1,255 @@
+---
+title: "Untitled"
+author: "Oecal Kaptan"
+date: "2022-08-24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##1-Introduction##
+ The methods below that used to predict response variable "HeartDisease" which is a binary outcome that consist of "Yes" and "No". That's why all this methods below that used in classification setting.
+ The methods that used for classification :
+ 
+   #Logistic Regression
+   #Linear Discriminant Analysis
+   #Quadratic Discriminant Analysis
+   #Decision Tree
+   #Boosting
+   #Random Forest
+ 
+ 
+ The purpose of this study to find best model that can predict the new data with a good predicting power.
+ To find best model the data splitted into training and test set. Predictors selected by using subset selection function that called regsubsets().To overcome the problem of imbalanced classes  upsampling method is used for each method. Also, the results without upsampling also provided in the section of Final Report. The models above used without upsampling had lower "True Positive Rates".Higher TPR achivied by using upsampling method. Also,Final decision is taken by checking the models with and without "Cross Validation" and "Upsampling". 
+ 
+ 
+ 
+ 
+ 
+ 
+##2-Pre-processing##
+ Before applying the models that mentioned above the dataset has passed some editing steps.These steps are:
+    #a)Loading Data
+    #b)Checking missing Values
+    #c)Coliniarity
+    #d)Data without predictive power
+    #e)Data Transformation
+
+
+###a)Loading Data
+Data loaded and saved in tibble format.Unneccesary variable X is removed since X is only consist of number of rows. 
+```{r}
+data<- read.csv("~/Downloads/Heart_Train.csv")%>%tibble()
+data <- data[,-1]
+```
+
+ 
+###b) Checking Missing Values###
+To check missing values is.na() function used to find total number of missing values.The output is zero.
+(This means dataset is already observed.)
+
+```{r}
+sum(is.na(data)==TRUE)
+```
+
+###c)Coliniarity###
+To check coliniarity all varaibles converted as numerical. Note that numerical transformation is only used to see the correlation between each variables. Since the variables are mostly in categorical settings we could not use simple cor() function.That's why numerical transformation was neccesary to check colinearity.
+
+```{r}
+data_cor <- data %>% mutate(HeartDisease = ifelse(data$HeartDisease == "Yes",1,0),
+           Smoking = ifelse(data$Smoking == "Yes",1,0),
+           AlcoholDrinking = ifelse(data$AlcoholDrinking == "Yes",1,0),
+           Stroke = ifelse(data$Stroke == "Yes",1,0),
+           DiffWalking= ifelse(data$DiffWalking == "Yes",1,0),
+           Sex= ifelse(data$Sex == "Female",1,0),
+           Diabetic = ifelse(data$Diabetic == "Yes",1,0),
+           PhysicalActivity = ifelse(data$PhysicalActivity == "Yes",1,0),
+           Stroke = ifelse(data$Stroke == "Yes",1,0),
+           Asthma= ifelse(data$Asthma == "Yes",1,0),
+           KidneyDisease= ifelse(data$KidneyDisease == "Yes",1,0),
+           SkinCancer = ifelse(data$SkinCancer == "Yes",1,0))%>%mutate_if(is.character,as.factor)%>%
+  mutate_if(is.factor,as.numeric)%>%mutate(BMI = BMI,
+                                           PhysicalHealth = unclass(PhysicalHealth),
+                                           MentalHealth = unclass(MentalHealth),
+                                           AgeCategory = unclass(AgeCategory),
+                                           Race = unclass(Race),
+                                           GenHealth = unclass(GenHealth),
+                                           SleepTime = SleepTime)
+
+```
+
+After numerical transformation , Spearman's rank correlation coefficient is used to calculate correaltion matrix. By using findCorrelation() function correlation matrix checked for values equal or above the cutoff number.In case of highlt correlated variables, the mean absoulte correlation is computed and higher MAC would removed. In HD dataset there are no highly correlated variables. That's why no variables removed in this step.
+```{r}
+correlationsMatrix <- cor(data_cor, method = 'spearman', use = "pairwise.complete.obs")
+highCorFeatures <- findCorrelation(correlationsMatrix, cutoff = 0.8, exact = TRUE) 
+names(data_cor[,highCorFeatures])
+
+```
+
+
+
+###d)Data without predictive power###
+Before running the models ,each variables have checked in respective probability of having HD.
+Below there are the some features of AlcoholDrinking And Race Variables to see their precidictive power.
+Method used all variables and only the removed variables exist in the code chunk below.
+The probabilty of having HD if AlcoholDrinking is "Yes" is 0.08 and 0.05 for if it is "No". There is no such a big difference thats why AlcoholDrinking is removed. Same as the variable Race check with same way and removed.
+```{r}
+
+a<- data%>% filter(HeartDisease == "Yes" & AlcoholDrinking == "Yes")%>% count()#1030
+b <- data%>% filter(HeartDisease == "No" & AlcoholDrinking == "Yes")%>% count()#18581
+
+c <- data %>% filter(HeartDisease == "Yes" & AlcoholDrinking == "No")%>% count()#23606
+d <- data %>% filter(HeartDisease == "No" & AlcoholDrinking == "No")%>% count()#244599
+
+hd_alcohol_yes <- a/(a+b)
+hd_alcohol_no <- c/(c+d)
+ad <- c(hd_alcohol_no,hd_alcohol_yes)
+names(ad) <- c("Probabilty of HD if AlcoholDrinking is Yes","Probabilty of HD if AlcoholDrinking is No")
+print(ad)
+
+````
+Removing the variables AlcoholDrinking and Race.
+```{r}
+data <- data[,-c(4,11)]
+```
+
+
+#e)Data Transformation
+Better understanding of each variables and classes we used some tranformations below.
+
+Classes of BMI converted classes in Healty,Overweighted and Obesity.
+     -Source:Adult Body Mass Index - Overweight & Obesity - CDC  https://www.cdc.gov
+AgeCategory is also converted to 3 classes which are "Youth","Adults" and "Seniors".
+     -Source : Age Categories, Life Cycle Groupings https://www.statcan.gc.ca 
+     
+     
+Other transformations can seen below.
+
+```{r}
+data1 <- data %>% mutate(AgeCategory = ifelse(AgeCategory == "18-24","Youth",
+                                              ifelse(AgeCategory == "65-69","Seniors",
+                                                     ifelse(AgeCategory == "70-74","Seniors",
+                                                            ifelse(AgeCategory == "75-79","Seniors",
+                                                                   ifelse(AgeCategory== "80 or older","Seniors","Adults"))))),
+                         BMI = ifelse(BMI <= 25,"Healty",
+                                      ifelse(BMI >= 30,"Obestiy","Overweight")),
+                        GenHealth = ifelse(GenHealth == "Poor","Poor",
+                                            ifelse(GenHealth == "Fair","Fair",
+                                                   ifelse(GenHealth == "Good","Good","Excellent"))),
+                         PhysicalHealth = ifelse(PhysicalHealth >= 20, "Bad",
+                                                 ifelse(PhysicalHealth  <= 10,"Good","Fair")),
+                         MentalHealth = ifelse(MentalHealth >= 20, "Bad",
+                                               ifelse(MentalHealth  <= 10,"Good","Fair")),
+                         SleepTime = ifelse(SleepTime <= 6,"Not Enough",
+                                            ifelse(SleepTime >=10,"Extreme","Normal")))
+
+
+
+```
+
+Converting the variables mutate_if() is used to convert all the charcter types of variable to factor. Which is neccesary for classification analyse. And grapichal overview of the variables.
+
+```{r}
+data1 <- data1%>% mutate_if(is.character,as.factor)
+hd_long_fact_tbl <- data1  %>%
+  gather(key = "key", value = "value", -HeartDisease)
+plot_of_predictors <- hd_long_fact_tbl %>%  ggplot(aes(value)) +
+  geom_bar(aes(x = value,fill     = HeartDisease), 
+           alpha    = .6, 
+           position = "dodge", 
+           color    = "black",
+           width    = .8) +
+  labs(x = "",y = "",
+       title = "Scaled Effect of Variables") +
+  theme(axis.text.y  = element_blank(),axis.ticks.y = element_blank()) +
+  facet_wrap(~ key, scales = "free", nrow = 4) +
+  scale_fill_manual(values = c("#fde725ff", "#20a486ff"),
+                    name   = "HeartDisease",
+                    labels = c("No HD", "Yes HD"))
+plot_of_predictors
+
+````
+
+#3 Model Selection and Training
+
+In this section we splitted the data traning and test part. And regsubsets() function used to chose best parameters.
+
+```{r}
+set.seed(123)
+train.id<-createDataPartition(y=data1$HeartDisease, times = 1, p=0.8, list = F)
+train<-data1[train.id,]
+test<-data1[-train.id,]
+```
+
+Chosing the Parameters
+```{r}
+subset_selection <- function(data,max_var=NULL,method=NULL){
+  if(method == "NULL"){
+    reg <<- regsubsets(HeartDisease~., data = data, nvmax = max_var)
+  } else {
+    reg <<- regsubsets(HeartDisease~., data = train, nvmax = max_var, method = method)
+  }
+  reg_summary <- summary(reg)
+  
+  measures<-tibble(variables=1:max_var,
+                   CP=reg_summary$cp,
+                   BIC=reg_summary$bic,
+                   Adj.R2=reg_summary$adjr2) %>%
+    pivot_longer(2:4, names_to = "measures")
+  measures
+  # compute optimal numbers of variables along with standard errors of measures
+  stats<-measures %>%
+    group_by(measures) %>%
+    mutate(optimal= case_when(measures=="CP"~min(value),
+                              measures=="BIC"~min(value),
+                              measures=="Adj.R2"~max(value)),
+           SD=sd(value)) %>%
+    filter(value==optimal)
+  # visualization
+  vis <- ggplot(measures, aes(x=factor(variables), y=value, group=1))+
+    geom_line(color="steelblue", size=1)+
+    geom_hline(data = stats, aes(yintercept=optimal+0.2*SD),
+               linetype="dashed", color="red")+
+    geom_hline(data = stats, aes(yintercept=optimal-0.2*SD),
+               linetype="dashed", color="red")+
+    labs(x="Number of Variables")+
+    facet_wrap(~measures, scales = "free_y", ncol=1)
+  return(vis)
+}
+```
+
+For chosing the parameters we used backward,forward,and default methods  of regsubsets() function.
+At the end all we get same variables in each methods. By looking at the graphs  below , 9 is the optimal
+choose as a number of predictors for the models. 
+```{r}
+forward <- subset_selection(data =train,max_var = 16,method="forward")
+coefi<-coef(reg, id=10)
+name_vars1<-names(coefi)[-c(1)]
+
+backward <-  subset_selection(data =train,max_var = 16,method="backward")
+coefi<-coef(reg, id=10)
+name_vars2<-names(coefi)[-c(1)]
+ 
+normal <-  subset_selection(data =train,max_var = 16,method="NULL")
+coefi<-coef(reg, id=10)
+name_vars3<-names(coefi)[-c(1)]
+
+
+forward
+backward
+normal
+```
+As seen as beloew all the predictors are same.
+```{r}
+
+Parameters <- matrix(c(name_vars1,name_vars2,name_vars3),ncol=3)
+colnames(Parameters) <- c("Forward","Backward","Normal")
+Parameters
+```
+
+
+
+
+
+

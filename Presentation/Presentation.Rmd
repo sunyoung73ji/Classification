@@ -1,0 +1,211 @@
+---
+title: "Prediction of Heart Disease Risk : Presentation "
+author: "Öcal Kaptan(TU), Pavlo Nikitenko(UDE), Sunyoung JI(TU)"
+cols_authors: 4
+subtitle: "Statistical Learning"
+deadline: "15.09.2022"
+type: "Presentation"
+date: "30.08.2022"
+supervisor: "Dr. Thomas Deckers"
+output:
+  pdf_document:
+    keep_tex: yes
+    template: template.tex
+    fig_caption: yes
+    citation_package: biblatex
+    number_sections: true
+toc: true
+lot: true
+lof: true
+graphics: true
+biblio-title: References
+fontsize: 11pt
+geometry: lmargin=2.5cm,rmargin=2.5cm,tmargin=2.5cm,bmargin=2.5cm
+biblio-files: references.bib
+classoption: a4paper
+---
+
+<!-- % Template Version 1.1 -->
+<!-- below function does some formatting for images; leave this untouched unless you know better :-) -->
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+crop <- function(im, left = 0, top = 0, right = 0, bottom = 0) {
+  d <- dim(im[[1]]); w <- d[2]; h <- d[3]
+  image_crop(im, glue::glue("{w-left-right}x{h-top-bottom}+{left}+{top}"))
+}
+```
+
+```{r library, include=FALSE}
+library(magick)
+library(tidyverse)
+library(stargazer)
+library(gbm)
+library(class)
+library(Formula)
+library(lattice)
+library(earth)
+library(klaR)
+library(mda)
+library(readr)
+library(caret)
+library(tidymodels)
+library(MASS)
+library(forecast)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+
+
+load("~/Desktop/Github/Heart_disease_risk/test_data.RData")
+```
+
+
+
+
+# Introduction
+
+* The purpose  is to analyze the ”HeartDisease” dataset and make predictions of heart disease risk of persons. In the dataset, the response variable `HeartDisease` which is a binary outcome that consist of "Yes" and "No".
+
+* The methods below that used for classification problems:
+** Logistic Regression
+** Discriminant Analysis
+** Decision Tree 
+** Gradient Boosting Machine 
+** Random Forest 
+
+* Dataset has splitted into traning and test dataset.
+
+* All models checked and compared by using the accuracy rate as performance measure.
+
+* The mising values, correlation between variables and variables without predictive power checked in the section "Data Pre-processing".
+
+ 
+# Data Pre-processing
+The  dataset has 19 predictors and the response variable `HeartDisease` has 287816 persons. The processes below that used to tidy up the dataset :
+
+1. In te first step all predictors are checked for missing values. There are no missing values in the dataset.
+
+2. Second, each variables have checked in respective probability of having `HeartDisease` risk.
+The probability of having HD if `AlcoholDrinking`  $=$ "Yes" is  0.08 and  0.05 for if it is "No". There is no such a big difference thats why `AlcoholDrinking` is removed. Same as the variable `Race` check with same way and removed. 
+
+3. Third, some predictors converted and defined to new classes as below :
+ 
+  i) `AgeCategory` is  converted to 3 classes which are "Youth","Adults" and "Seniors".
+  ii) ` GenHealth` is coverted to 4 classes which are "Poor","Fair","Good", "Excellent"
+  iii) `MentalHealth ` converted to 3 classes which are "Bad","Fair","Good".
+  iv) `BMI`and `SleepTime` normalized.
+  v) All the character types of predictors converted into factors. This convertion was necessary for the next step. 
+
+4. Forth, the dummy transformation was necessary to use the models. After the dummy transformation, correlation between the dummies are checked.In case of high correlation,the variable with higher the mean absolute correlation (MAC) would removed. Here there was no highly correlated variables.
+  
+
+
+# Model Selection and Training
+ 
+In this section dataset splitted into traning and pre-test part. After the seperation, `regsubsets()` function used to find best parameters for the models.
+
+
+# Modelling Approach
+For the  modelling approach, upsampling method is used with  repeated cross validation. Upsampling methods replicates the observations from minority class to balance the data. Also, `Repeated Cross-Validation is used with  3 times repeat and 10-fold to find the optimal. 
+
+## Logistic Regression
+
+
+## Discriminant Analysis
+* For discriminant analysis 3 models are used as below:
+
+ i) Linear Discriminant analysis(LDA):
+ `LDA` assumes that predictors are normally distributed  (Gaussian distribution) and the different classes have class-specific means and equal variance/covariance.
+  The accuracy for `LDA` by using the predictors from subset selection  process obtained as 74%. But when we tried to use `LDA` on full dataset and remove the unsignificant predictors, we achivied 76% of accuracy. That's why subset selection is not used for `LDA`.
+ 
+ ii) Quadratic Discriminat Analysis (QDA):
+ QDA is little bit more flexible than LDA, in the sense that it does not assumes the equality of variance/covariance. In other words, for QDA the covariance matrix can be different for each class.
+ 
+ For `QDA` the predictors from subset selection process are used. QDA get a accuracy of 81,72%
+ 
+ iii)Flexible Discriminant Analysis (FDA):
+ `FDA` is a flexible extension of LDA that uses non-linear combinations of predictors such as splines.
+ 
+ `FDA` model get a accuracy of 76,40%.
+ 
+```{r}
+aa <- list(lda=lda,qda=qda,fda=fda)
+
+#Lets collect all the results together
+result <- resamples(aa) 
+ggplot(result)+
+  labs(y="Accuracy")+theme_linedraw()
+
+```
+## Decision Tree 
+
+```{r}
+par(mar=c(1,1,1,1))
+plot(tree2$finalModel)
+text(tree2$finalModel, cex=0.4)
+```
+
+## Gradient Boosting Machine 
+
+
+
+## Random Forest 
+
+
+
+# Evaluation
+
+* Concluding, the models measured on the pre-test and new test set. Performance of the new test set shown below. 
+
+```{r echo=FALSE}
+conf_list <- list(Lreg = confusionMatrix(predict(mod3,test),
+        test$HeartDisease),
+   LDA = confusionMatrix(predict(lda,test),
+     test$HeartDisease),
+    QDA=confusionMatrix(predict(qda,test),
+    test$HeartDisease),
+   FDA=confusionMatrix(predict(fda,test),
+test$HeartDisease),
+Decision_Tree =confusionMatrix(predict(tree2,test),
+test$HeartDisease),
+Random_For=confusionMatrix(predict(rf_train_ranger,test),
+test$HeartDisease),
+GBM = confusionMatrix(predict(gbm_fit,test),
+test$HeartDisease))
+
+con_list_res <- sapply(conf_list,function(x) x$byClass)
+
+accury <- c() 
+
+collect_acc <- function(x){
+for (i in 1:length(x)) {
+accury[i] <- x[[i]][[3]][[1]]
+}
+names(accury) <- c("LogReg","LDA","QDA","FDA",
+"Dec.Tree","RandomF","GBM")
+return(accury)
+}
+Accuracy <- collect_acc(conf_list)
+
+TrainedSet_Accuracy <- c()
+TrainedSet_Accuracy[1]<- mod3$results[[2]]
+TrainedSet_Accuracy[2]<- lda$results[[2]]
+TrainedSet_Accuracy[3]<- qda$results[[2]]
+TrainedSet_Accuracy[4]<- max(fda$results[[3]])
+TrainedSet_Accuracy[5]<-  max(tree2$results$Accuracy)
+TrainedSet_Accuracy[6]<- rf_train_ranger$results[[4]]
+TrainedSet_Accuracy[7]<- gbm_fit$results[[5]]
+
+
+
+pred_table <- data.frame(rbind(con_list_res,Accuracy,TrainedSet_Accuracy))%>%knitr::kable()
+pred_table
+
+```
+
+
+
+
+
